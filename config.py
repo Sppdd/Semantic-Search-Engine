@@ -12,16 +12,24 @@ class Config:
     PINECONE_API_KEY = os.getenv("PINECONE_KEY")
     PINECONE_ENVIRONMENT = "gcp-starter"  # Free tier environment
     PINECONE_INDEX_NAME = "contracts"
-    DOCUSIGN_INTEGRATION_KEY = os.getenv("DOCUSIGN_INTEGRATION_KEY")
+    DOCUSIGN_INTEGRATION_KEY = os.getenv("DOCUSIGN_INTEGRATION_KEY", "2c6c5a85-0f00-4810-930d-35133c3f84a7")
+    DOCUSIGN_SECRET_KEY = os.getenv("DOCUSIGN_SECRET_KEY", "58c2ed69-1bc8-4599-b6b5-44fa232109ed")
+    DOCUSIGN_AUTHORIZATION_SERVER = "https://account-d.docusign.com"
+    DOCUSIGN_API_URL = "https://demo.docusign.net/restapi/v2.1/accounts"
+    DOCUSIGN_USERINFO_URL = "https://account-d.docusign.com/oauth/userinfo"
+    DOCUSIGN_TOKEN_URL = "https://account-d.docusign.com/oauth/token"
+    DOCUSIGN_AUTH_URL = "https://account-d.docusign.com/oauth/auth"
+    DOCUSIGN_REDIRECT_URI = "http://localhost:8501"  # Remove /callback
+    DOCUSIGN_SCOPES = "signature impersonation"  # Change scope to match DocuSign requirements
     DOCUSIGN_USER_ID = os.getenv("DOCUSIGN_USER_ID")
     DOCUSIGN_ACCOUNT_ID = os.getenv("DOCUSIGN_ACCOUNT_ID")
     BATCH_SIZE = 5  # Number of vectors to upsert at once 
 
     # DocuSign config
-    DOCUSIGN_CLIENT_ID = os.getenv('DOCUSIGN_CLIENT_ID')
-    DOCUSIGN_BASE_PATH = os.getenv('DOCUSIGN_BASE_PATH', 'https://demo.docusign.net/restapi')
-    DOCUSIGN_AUTH_SERVER = os.getenv('DOCUSIGN_AUTH_SERVER', 'account-d.docusign.com')
-    DOCUSIGN_REDIRECT_URI = os.getenv('DOCUSIGN_REDIRECT_URI', 'http://localhost:8501/ds/callback')
+    DOCUSIGN_CLIENT_ID = os.getenv("DOCUSIGN_CLIENT_ID")
+    DOCUSIGN_CLIENT_SECRET = os.getenv("DOCUSIGN_CLIENT_SECRET")
+    DOCUSIGN_BASE_PATH = "https://demo.docusign.net/restapi"
+    DOCUSIGN_AUTH_SERVER = "account-d.docusign.com"
 
     @staticmethod
     def validate_config():

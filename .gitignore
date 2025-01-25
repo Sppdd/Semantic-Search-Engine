@@ -11,3 +11,5 @@ semantic search\contracts\
 semantic search\contracts\Complete_with_DocuSign_Sales_Contract.pdf
 venv/
 contracts/
+quickstarter/
+examples.py

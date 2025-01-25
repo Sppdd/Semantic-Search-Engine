@@ -2,13 +2,15 @@ from docusign_esign import ApiClient, EnvelopesApi, AuthenticationApi, OAuth
 from config import Config
 import json
 import time
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 import base64
 import hashlib
 import secrets
 import requests
 from urllib.parse import urlencode
+import httpx
+import streamlit as st
 
 class DocuSignService:
     def __init__(self):
@@ -210,4 +212,114 @@ class DocuSignService:
             print(f"Failed to download document: {str(e)}")
             import traceback
             print(f"Traceback: {traceback.format_exc()}")
-            return None 
+            return None
+
+class DocuSignClient:
+    def __init__(self):
+        self.base_url = "https://demo.docusign.net/restapi/v2.1/accounts"
+        self.auth_url = "https://account-d.docusign.com/oauth/auth"
+        self.token_url = "https://account-d.docusign.com/oauth/token"
+        self.userinfo_url = "https://account-d.docusign.com/oauth/userinfo"
+        self.client = httpx.AsyncClient(timeout=60.0)
+        
+    async def get_token(self, code: str) -> Optional[str]:
+        """Exchange authorization code for access token"""
+        try:
+            # Add prompt=login to prevent caching issues
+            data = {
+                'grant_type': 'authorization_code',
+                'code': code,
+                'client_id': Config.DOCUSIGN_INTEGRATION_KEY,  # Use integration key instead
+                'client_secret': Config.DOCUSIGN_SECRET_KEY,   # Use secret key instead
+                'redirect_uri': Config.DOCUSIGN_REDIRECT_URI
+            }
+            
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            
+            response = await self.client.post(
+                self.token_url,
+                data=data,
+                headers=headers
+            )
+            response.raise_for_status()
+            token_data = response.json()
+            return token_data.get('access_token')
+        except Exception as e:
+            st.error(f"Error getting token: {str(e)}")
+            # Add more detailed error logging
+            if hasattr(e, 'response') and e.response is not None:
+                st.error(f"Response content: {e.response.text}")
+            return None
+
+    def get_authorization_url(self) -> str:
+        """Generate DocuSign OAuth authorization URL"""
+        params = {
+            'response_type': 'code',
+            'scope': Config.DOCUSIGN_SCOPES,  # Use scopes from config
+            'client_id': Config.DOCUSIGN_INTEGRATION_KEY,  # Use integration key
+            'redirect_uri': Config.DOCUSIGN_REDIRECT_URI,
+            'prompt': 'login'  # Force login prompt
+        }
+        auth_url = f"{self.auth_url}?" + "&".join(f"{k}={v}" for k, v in params.items())
+        return auth_url
+
+    async def fetch_account_id(self) -> Optional[str]:
+        """Fetch DocuSign account ID"""
+        try:
+            headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
+            response = await self.client.get(self.userinfo_url, headers=headers)
+            response.raise_for_status()
+            user_info = response.json()
+            return user_info['accounts'][0]['account_id']
+        except Exception as e:
+            st.error(f"Error fetching account ID: {str(e)}")
+            return None
+
+    async def fetch_envelopes(self, account_id: str) -> List[Dict]:
+        """Fetch envelopes from DocuSign"""
+        try:
+            headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
+            response = await self.client.get(
+                f"{self.base_url}/{account_id}/envelopes",
+                headers=headers,
+                params={'from_date': '2024-01-01'}
+            )
+            response.raise_for_status()
+            return response.json().get('envelopes', [])
+        except Exception as e:
+            st.error(f"Error fetching envelopes: {str(e)}")
+            return []
+
+    async def fetch_documents(self, account_id: str, envelope_id: str) -> List[Dict]:
+        """Fetch documents for an envelope"""
+        try:
+            headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
+            response = await self.client.get(
+                f"{self.base_url}/{account_id}/envelopes/{envelope_id}/documents",
+                headers=headers
+            )
+            response.raise_for_status()
+            return response.json().get('envelopeDocuments', [])
+        except Exception as e:
+            st.error(f"Error fetching documents: {str(e)}")
+            return []
+
+    async def fetch_document(self, account_id: str, document_uri: str) -> Optional[bytes]:
+        """Fetch document content"""
+        try:
+            headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
+            response = await self.client.get(
+                f"{self.base_url}/{account_id}{document_uri}",
+                headers=headers
+            )
+            response.raise_for_status()
+            return response.content
+        except Exception as e:
+            st.error(f"Error fetching document content: {str(e)}")
+            return None
+
+    async def close(self):
+        """Close the HTTP client"""
+        await self.client.aclose() 

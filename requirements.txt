@@ -4,3 +4,8 @@ requests
 pinecone-client
 numpy
 docusign-esign
+sentence-transformers
+PyPDF2
+python-docx
+PyMuPDF
+httpx

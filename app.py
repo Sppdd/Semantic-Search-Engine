@@ -1,17 +1,21 @@
 import streamlit as st
 from services.embedding_service import EmbeddingService
 from services.vector_store import VectorStore
-from services.docusign_service import DocuSignService
 from typing import List, Dict
 from config import Config
 import time
-from urllib.parse import parse_qs, urlparse
+import os
+from pathlib import Path
+import PyPDF2
+import docx
+import fitz  # PyMuPDF
+import asyncio
+from services.docusign_service import DocuSignClient
 
 class AgreementSearchApp:
     def __init__(self):
         self.embedding_service = EmbeddingService()
         self.vector_store = VectorStore()
-        self.docusign_service = DocuSignService()
         self.status_placeholder = None
 
     def set_status(self, message: str, is_error: bool = False):
@@ -40,6 +44,42 @@ class AgreementSearchApp:
             self.set_status(f"Search failed: {str(e)}", is_error=True)
             return []
 
+def extract_text_from_file(file):
+    """Extract text from various file formats"""
+    try:
+        file_extension = Path(file.name).suffix.lower()
+        
+        if file_extension == '.pdf':
+            try:
+                # Try PyMuPDF first
+                pdf_document = fitz.open(stream=file.read(), filetype="pdf")
+                text = ""
+                for page in pdf_document:
+                    text += page.get_text()
+                return text
+            except Exception as e:
+                # Fallback to PyPDF2
+                file.seek(0)  # Reset file pointer
+                pdf_reader = PyPDF2.PdfReader(file)
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text()
+                return text
+            
+        elif file_extension == '.docx':
+            doc = docx.Document(file)
+            return ' '.join([paragraph.text for paragraph in doc.paragraphs])
+            
+        elif file_extension == '.txt':
+            return file.getvalue().decode('utf-8')
+            
+        else:
+            st.error(f"Unsupported file format: {file_extension}")
+            return None
+    except Exception as e:
+        st.error(f"Error processing file {file.name}: {str(e)}")
+        return None
+
 def check_api_status():
     """Check if the APIs are accessible"""
     embedding_service = EmbeddingService()
@@ -47,8 +87,7 @@ def check_api_status():
     
     status = {
         "huggingface": False,
-        "pinecone": False,
-        "docusign": False
+        "pinecone": False
     }
     
     # Check Hugging Face API
@@ -65,103 +104,18 @@ def check_api_status():
     except Exception as e:
         st.error(f"Pinecone API Error: {str(e)}")
     
-    # DocuSign status is based on session state
-    status["docusign"] = st.session_state.get('docusign_authenticated', False)
-    
     return status
-
-def initialize_docusign():
-    if 'docusign' not in st.session_state:
-        st.session_state.docusign = DocuSignService()
-    return st.session_state.docusign
-
-def handle_docusign_callback():
-    """Handle the DocuSign OAuth callback"""
-    try:
-        docusign = initialize_docusign()
-        
-        # Get query parameters
-        query_params = st.query_params
-        code = query_params.get('code', [None])[0]
-        state = query_params.get('state', [None])[0]
-        
-        if code:
-            # Complete authentication
-            if docusign.authenticate_with_code(code, state):
-                st.session_state.docusign_authenticated = True
-                st.session_state.access_token = docusign.access_token
-                
-                # Clear query parameters and redirect to main page
-                st.query_params.clear()
-                
-                # Show success message and redirect button
-                st.success("Successfully authenticated with DocuSign!")
-                st.markdown("""
-                    <meta http-equiv="refresh" content="0;url=/" />
-                    <a href="/" target="_self">Click here if not automatically redirected</a>
-                    """, 
-                    unsafe_allow_html=True
-                )
-            else:
-                st.error("Failed to authenticate with DocuSign")
-                st.button("Try Again", on_click=lambda: st.query_params.clear())
-    except Exception as e:
-        st.error(f"Authentication error: {str(e)}")
-        st.button("Return to Home", on_click=lambda: st.query_params.clear())
-
-def docusign_auth_button():
-    """Show DocuSign authentication button"""
-    docusign = initialize_docusign()
-    
-    if not docusign.check_authentication():
-        auth_url = docusign.get_authorization_url()
-        st.markdown(f'''
-            <a href="{auth_url}" target="_self">
-                <button style="background-color:#2557a7;color:white;padding:0.5em 1em;border:none;border-radius:3px;cursor:pointer">
-                    Login with DocuSign
-                </button>
-            </a>
-            ''', 
-            unsafe_allow_html=True
-        )
-    else:
-        st.success("Authenticated with DocuSign")
 
 def main():
     # Initialize session state
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = 'main'
-    if 'docusign_authenticated' not in st.session_state:
-        st.session_state.docusign_authenticated = False
-    if 'access_token' not in st.session_state:
-        st.session_state.access_token = None
-        
-    # Debugging info
-    if st.sidebar.checkbox("Show Debug Info"):
-        st.sidebar.write("Session State:", st.session_state)
-        st.sidebar.write("Query Params:", st.query_params)
-        
-    # Check URL path
-    url_path = st.query_params.get('page', ['main'])[0]
-    
-    # Handle callback if code is present in query params
-    if 'code' in st.query_params:
-        handle_docusign_callback()
-        return
+    if 'processed_files' not in st.session_state:
+        st.session_state.processed_files = set()
         
     # Main app content
-    st.title("Agreement Search Engine")
+    st.title("Semantic Search Engine")
     
     # Add a sidebar for status information
     st.sidebar.title("System Status")
-    
-    # Validate configuration
-    try:
-        Config.validate_config()
-    except EnvironmentError as e:
-        st.sidebar.error(f"Configuration Error: {str(e)}")
-        st.error("System is not properly configured. Please check the sidebar for details.")
-        return
 
     # Check API status
     if st.sidebar.button("Check API Status"):
@@ -171,16 +125,15 @@ def main():
         st.sidebar.markdown("### API Status")
         st.sidebar.markdown(f"🤗 Hugging Face API: {'✅' if status['huggingface'] else '❌'}")
         st.sidebar.markdown(f"🌲 Pinecone API: {'✅' if status['pinecone'] else '❌'}")
-        st.sidebar.markdown(f"📝 DocuSign API: {'✅' if status['docusign'] else '❌'}")
 
     # Initialize app
     app = AgreementSearchApp()
 
     # Add tabs for different functionalities
-    tab1, tab2 = st.tabs(["Search Agreements", "Import from DocuSign"])
+    tab1, tab2, tab3 = st.tabs(["Search Documents", "Import Documents", "DocuSign Import"])
     
     with tab1:
-        # Existing search interface
+        # Search interface
         query = st.text_input("Enter your search query:")
         
         col1, col2 = st.columns([1, 5])
@@ -196,7 +149,7 @@ def main():
                             st.success(f"Found {len(results)} results!")
                             for idx, result in enumerate(results, 1):
                                 with st.expander(f"Result {idx} - Score: {result.score:.2f}"):
-                                    st.write(f"Agreement: {result.metadata.get('title', 'N/A')}")
+                                    st.write(f"Document: {result.metadata.get('title', 'N/A')}")
                                     st.write(f"Content Preview: {result.metadata.get('preview', 'N/A')}")
                         else:
                             st.warning("No results found")
@@ -204,37 +157,176 @@ def main():
                     st.warning("Please enter a search query")
     
     with tab2:
-        st.header("Import Documents from DocuSign")
+        st.header("Import Local Documents")
         
-        # Show authentication button if not authenticated
-        if not st.session_state.docusign_authenticated:
-            docusign_auth_button()
-            return
+        # File uploader
+        uploaded_files = st.file_uploader(
+            "Choose files to import (PDF, DOCX, TXT)", 
+            accept_multiple_files=True,
+            type=['pdf', 'docx', 'txt']
+        )
         
-        # Main app content when authenticated
-        st.write("Import Documents from DocuSign")
-        
-        if st.button("Fetch Documents"):
-            documents = st.session_state.docusign_service.get_envelopes()
-            if documents:
-                st.write("Documents found:", len(documents))
-                for doc in documents:
-                    st.write(doc['name'])
-            else:
-                st.warning("No documents found or error occurred")
+        if uploaded_files:
+            for file in uploaded_files:
+                if file.name not in st.session_state.processed_files:
+                    with st.spinner(f"Processing {file.name}..."):
+                        text_content = extract_text_from_file(file)
+                        if text_content:
+                            # Get embedding and store in vector database
+                            embedding = app.embedding_service.get_single_embedding(text_content)
+                            if embedding:
+                                try:
+                                    app.vector_store.upsert(
+                                        vectors=[(
+                                            str(hash(file.name)),  # unique ID
+                                            embedding,  # vector
+                                            {  # metadata as part of the vector tuple
+                                                'title': file.name,
+                                                'preview': text_content[:200] + "..."
+                                            }
+                                        )]
+                                    )
+                                    st.session_state.processed_files.add(file.name)
+                                    st.success(f"Successfully processed {file.name}")
+                                except Exception as e:
+                                    st.error(f"Error storing {file.name}: {str(e)}")
+                        else:
+                            st.error(f"Could not extract text from {file.name}")
 
-    # Add a footer with some helpful information
-    st.markdown("---")
-    st.markdown("""
-    ### How to use:
-    1. First, connect your DocuSign account using the "Import from DocuSign" tab
-    2. Once connected, you can:
-       - Browse and import documents from your DocuSign account
-       - Search through imported agreements using keywords
-    3. Use the search tab to find specific content within imported agreements
-    
-    Check the system status in the sidebar to ensure all services are operational.
-    """)
+        # Show processed files
+        if st.session_state.processed_files:
+            st.subheader("Processed Files:")
+            for file_name in st.session_state.processed_files:
+                st.write(f"✅ {file_name}")
+
+    with tab3:
+        st.header("Import from DocuSign")
+        
+        # Initialize DocuSign state
+        if 'docusign_token' not in st.session_state:
+            st.session_state.docusign_token = None
+        
+        # Get code parameter from URL if present (using non-experimental API)
+        code = st.query_params.get("code", None)
+        
+        if code and not st.session_state.docusign_token:
+            # Exchange code for token
+            with st.spinner("Authenticating with DocuSign..."):
+                client = DocuSignClient()
+                token = asyncio.run(client.get_token(code))
+                if token:
+                    st.session_state.docusign_token = token
+                    # Clear code from URL
+                    st.query_params.clear()
+                    st.rerun()
+                else:
+                    st.error("Failed to authenticate with DocuSign. Please try again.")
+                    st.query_params.clear()
+        
+        # Show different content based on authentication state
+        if not st.session_state.docusign_token:
+            st.write("Please log in to DocuSign to access your documents.")
+            client = DocuSignClient()
+            auth_url = client.get_authorization_url()
+            st.link_button("Login to DocuSign", auth_url)
+        else:
+            # Show authenticated UI
+            st.success("✅ Connected to DocuSign")
+            
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                if st.button("Fetch Documents", key="fetch_docs", use_container_width=True):
+                    with st.spinner("Fetching documents from DocuSign..."):
+                        try:
+                            client = DocuSignClient()
+                            account_id = asyncio.run(client.fetch_account_id())
+                            
+                            if account_id:
+                                envelopes = asyncio.run(client.fetch_envelopes(account_id))
+                                
+                                if envelopes:
+                                    st.success(f"Found {len(envelopes)} envelopes")
+                                    
+                                    # Process each envelope
+                                    for envelope in envelopes:
+                                        with st.expander(f"📩 Envelope: {envelope.get('emailSubject', 'No Subject')}"):
+                                            st.write(f"Status: {envelope.get('status')}")
+                                            st.write(f"Sent: {envelope.get('sentDateTime')}")
+                                            
+                                            # Fetch documents for this envelope
+                                            docs = asyncio.run(client.fetch_documents(
+                                                account_id, 
+                                                envelope['envelopeId']
+                                            ))
+                                            
+                                            if docs:
+                                                for doc in docs:
+                                                    doc_col1, doc_col2 = st.columns([4, 1])
+                                                    with doc_col1:
+                                                        st.write(f"📄 {doc['name']}")
+                                                    with doc_col2:
+                                                        if st.button("Import", key=f"import_{envelope['envelopeId']}_{doc['documentId']}"):
+                                                            with st.spinner(f"Importing {doc['name']}..."):
+                                                                content = asyncio.run(
+                                                                    client.fetch_document(
+                                                                        account_id,
+                                                                        doc['uri']
+                                                                    )
+                                                                )
+                                                                if content:
+                                                                    text_content = extract_text_from_bytes(content)
+                                                                    if text_content:
+                                                                        embedding = app.embedding_service.get_single_embedding(text_content)
+                                                                        if embedding:
+                                                                            try:
+                                                                                app.vector_store.upsert(
+                                                                                    vectors=[(
+                                                                                        f"docusign_{doc['documentId']}",
+                                                                                        embedding,
+                                                                                        {
+                                                                                            'title': doc['name'],
+                                                                                            'preview': text_content[:200] + "...",
+                                                                                            'source': 'DocuSign'
+                                                                                        }
+                                                                                    )]
+                                                                                )
+                                                                                st.session_state.processed_files.add(doc['name'])
+                                                                                st.success(f"Successfully imported {doc['name']}")
+                                                                            except Exception as e:
+                                                                                st.error(f"Error storing document: {str(e)}")
+                            else:
+                                st.info("No envelopes found in your account")
+                        except Exception as e:
+                            st.error(f"Error fetching documents: {str(e)}")
+            
+            with col2:
+                if st.button("Logout", key="logout_button"):
+                    st.session_state.docusign_token = None
+                    st.query_params.clear()
+                    st.rerun()
+
+def extract_text_from_bytes(content: bytes) -> str:
+    """Extract text from document bytes"""
+    try:
+        # Try PyMuPDF first
+        pdf_document = fitz.open(stream=content, filetype="pdf")
+        text = ""
+        for page in pdf_document:
+            text += page.get_text()
+        return text
+    except Exception as e:
+        try:
+            # Fallback to PyPDF2
+            from io import BytesIO
+            pdf_reader = PyPDF2.PdfReader(BytesIO(content))
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+            return text
+        except Exception as e:
+            st.error(f"Error extracting text from document: {str(e)}")
+            return None
 
 if __name__ == "__main__":
     main()
