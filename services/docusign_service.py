@@ -11,6 +11,7 @@ import requests
 from urllib.parse import urlencode
 import httpx
 import streamlit as st
+import asyncio
 
 class DocuSignService:
     def __init__(self):
@@ -221,7 +222,20 @@ class DocuSignClient:
         self.token_url = "https://account-d.docusign.com/oauth/token"
         self.userinfo_url = "https://account-d.docusign.com/oauth/userinfo"
         self.client = httpx.AsyncClient(timeout=60.0)
-        
+        self._loop = None
+    
+    def _get_event_loop(self):
+        """Get or create an event loop"""
+        try:
+            self._loop = asyncio.get_event_loop()
+            if self._loop.is_closed():
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+        except RuntimeError:
+            self._loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._loop)
+        return self._loop
+
     async def get_token(self, code: str) -> Optional[str]:
         """Exchange authorization code for access token"""
         try:
@@ -295,6 +309,9 @@ class DocuSignClient:
     async def fetch_documents(self, account_id: str, envelope_id: str) -> List[Dict]:
         """Fetch documents for an envelope"""
         try:
+            # Ensure we have a valid event loop
+            self._get_event_loop()
+            
             headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
             response = await self.client.get(
                 f"{self.base_url}/{account_id}/envelopes/{envelope_id}/documents",
@@ -322,4 +339,5 @@ class DocuSignClient:
 
     async def close(self):
         """Close the HTTP client"""
-        await self.client.aclose() 
+        if self.client:
+            await self.client.aclose() 

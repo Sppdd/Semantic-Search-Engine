@@ -12,8 +12,8 @@ class Config:
     PINECONE_API_KEY = os.getenv("PINECONE_KEY")
     PINECONE_ENVIRONMENT = "gcp-starter"  # Free tier environment
     PINECONE_INDEX_NAME = "contracts"
-    DOCUSIGN_INTEGRATION_KEY = os.getenv("DOCUSIGN_INTEGRATION_KEY", "2c6c5a85-0f00-4810-930d-35133c3f84a7")
-    DOCUSIGN_SECRET_KEY = os.getenv("DOCUSIGN_SECRET_KEY", "58c2ed69-1bc8-4599-b6b5-44fa232109ed")
+    DOCUSIGN_INTEGRATION_KEY = os.getenv("DOCUSIGN_INTEGRATION_KEY")
+    DOCUSIGN_SECRET_KEY = os.getenv("DOCUSIGN_SECRET_KEY")
     DOCUSIGN_AUTHORIZATION_SERVER = "https://account-d.docusign.com"
     DOCUSIGN_API_URL = "https://demo.docusign.net/restapi/v2.1/accounts"
     DOCUSIGN_USERINFO_URL = "https://account-d.docusign.com/oauth/userinfo"
