@@ -8,4 +8,5 @@ sentence-transformers
 PyPDF2
 python-docx
 PyMuPDF
-httpx
+httpx>=0.24.0
+asyncio>=3.4.3

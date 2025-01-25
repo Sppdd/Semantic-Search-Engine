@@ -243,60 +243,9 @@ def main():
                             account_id = asyncio.run(client.fetch_account_id())
                             
                             if account_id:
-                                envelopes = asyncio.run(client.fetch_envelopes(account_id))
-                                
-                                if envelopes:
-                                    st.success(f"Found {len(envelopes)} envelopes")
-                                    
-                                    # Process each envelope
-                                    for envelope in envelopes:
-                                        with st.expander(f"📩 Envelope: {envelope.get('emailSubject', 'No Subject')}"):
-                                            st.write(f"Status: {envelope.get('status')}")
-                                            st.write(f"Sent: {envelope.get('sentDateTime')}")
-                                            
-                                            # Fetch documents for this envelope
-                                            docs = asyncio.run(client.fetch_documents(
-                                                account_id, 
-                                                envelope['envelopeId']
-                                            ))
-                                            
-                                            if docs:
-                                                for doc in docs:
-                                                    doc_col1, doc_col2 = st.columns([4, 1])
-                                                    with doc_col1:
-                                                        st.write(f"📄 {doc['name']}")
-                                                    with doc_col2:
-                                                        if st.button("Import", key=f"import_{envelope['envelopeId']}_{doc['documentId']}"):
-                                                            with st.spinner(f"Importing {doc['name']}..."):
-                                                                content = asyncio.run(
-                                                                    client.fetch_document(
-                                                                        account_id,
-                                                                        doc['uri']
-                                                                    )
-                                                                )
-                                                                if content:
-                                                                    text_content = extract_text_from_bytes(content)
-                                                                    if text_content:
-                                                                        embedding = app.embedding_service.get_single_embedding(text_content)
-                                                                        if embedding:
-                                                                            try:
-                                                                                app.vector_store.upsert(
-                                                                                    vectors=[(
-                                                                                        f"docusign_{doc['documentId']}",
-                                                                                        embedding,
-                                                                                        {
-                                                                                            'title': doc['name'],
-                                                                                            'preview': text_content[:200] + "...",
-                                                                                            'source': 'DocuSign'
-                                                                                        }
-                                                                                    )]
-                                                                                )
-                                                                                st.session_state.processed_files.add(doc['name'])
-                                                                                st.success(f"Successfully imported {doc['name']}")
-                                                                            except Exception as e:
-                                                                                st.error(f"Error storing document: {str(e)}")
+                                asyncio.run(process_envelopes(client, account_id))
                             else:
-                                st.info("No envelopes found in your account")
+                                st.error("Could not fetch account ID")
                         except Exception as e:
                             st.error(f"Error fetching documents: {str(e)}")
             
@@ -305,6 +254,53 @@ def main():
                     st.session_state.docusign_token = None
                     st.query_params.clear()
                     st.rerun()
+
+async def process_envelopes(client, account_id):
+    """Process envelopes and their documents"""
+    envelopes = await client.fetch_envelopes(account_id)
+    if envelopes:
+        st.success(f"Found {len(envelopes)} envelopes")
+        
+        for envelope in envelopes:
+            with st.expander(f"📩 Envelope: {envelope.get('emailSubject', 'No Subject')}"):
+                st.write(f"Status: {envelope.get('status')}")
+                st.write(f"Sent: {envelope.get('sentDateTime')}")
+                
+                docs = await client.fetch_documents(account_id, envelope['envelopeId'])
+                if docs:
+                    for doc in docs:
+                        doc_col1, doc_col2 = st.columns([4, 1])
+                        with doc_col1:
+                            st.write(f"📄 {doc['name']}")
+                        with doc_col2:
+                            if st.button("Import", key=f"import_{envelope['envelopeId']}_{doc['documentId']}"):
+                                await process_document(client, account_id, doc)
+
+async def process_document(client, account_id, doc):
+    """Process a single document"""
+    with st.spinner(f"Importing {doc['name']}..."):
+        content = await client.fetch_document(account_id, doc['uri'])
+        if content:
+            text_content = extract_text_from_bytes(content)
+            if text_content:
+                embedding = app.embedding_service.get_single_embedding(text_content)
+                if embedding:
+                    try:
+                        app.vector_store.upsert(
+                            vectors=[(
+                                f"docusign_{doc['documentId']}",
+                                embedding,
+                                {
+                                    'title': doc['name'],
+                                    'preview': text_content[:200] + "...",
+                                    'source': 'DocuSign'
+                                }
+                            )]
+                        )
+                        st.session_state.processed_files.add(doc['name'])
+                        st.success(f"Successfully imported {doc['name']}")
+                    except Exception as e:
+                        st.error(f"Error storing document: {str(e)}")
 
 def extract_text_from_bytes(content: bytes) -> str:
     """Extract text from document bytes"""

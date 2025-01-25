@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 import httpx
 import streamlit as st
 import asyncio
+from contextlib import asynccontextmanager
 
 class DocuSignService:
     def __init__(self):
@@ -221,70 +222,69 @@ class DocuSignClient:
         self.auth_url = "https://account-d.docusign.com/oauth/auth"
         self.token_url = "https://account-d.docusign.com/oauth/token"
         self.userinfo_url = "https://account-d.docusign.com/oauth/userinfo"
-        self.client = httpx.AsyncClient(timeout=60.0)
-        self._loop = None
-    
-    def _get_event_loop(self):
-        """Get or create an event loop"""
+        self.client = None
+        
+    @asynccontextmanager
+    async def get_client(self):
+        """Get or create an HTTP client with proper event loop management"""
+        if self.client is None:
+            self.client = httpx.AsyncClient(timeout=60.0)
         try:
-            self._loop = asyncio.get_event_loop()
-            if self._loop.is_closed():
-                self._loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self._loop)
-        except RuntimeError:
-            self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
-        return self._loop
+            yield self.client
+        finally:
+            if self.client:
+                await self.client.aclose()
+                self.client = None
 
-    async def get_token(self, code: str) -> Optional[str]:
-        """Exchange authorization code for access token"""
-        try:
-            # Add prompt=login to prevent caching issues
-            data = {
-                'grant_type': 'authorization_code',
-                'code': code,
-                'client_id': Config.DOCUSIGN_INTEGRATION_KEY,  # Use integration key instead
-                'client_secret': Config.DOCUSIGN_SECRET_KEY,   # Use secret key instead
-                'redirect_uri': Config.DOCUSIGN_REDIRECT_URI
-            }
-            
-            headers = {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-            
-            response = await self.client.post(
-                self.token_url,
-                data=data,
-                headers=headers
-            )
+    async def _make_request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """Make HTTP request with proper client management"""
+        async with self.get_client() as client:
+            response = await client.request(method, url, **kwargs)
             response.raise_for_status()
-            token_data = response.json()
-            return token_data.get('access_token')
-        except Exception as e:
-            st.error(f"Error getting token: {str(e)}")
-            # Add more detailed error logging
-            if hasattr(e, 'response') and e.response is not None:
-                st.error(f"Response content: {e.response.text}")
-            return None
+            return response
 
     def get_authorization_url(self) -> str:
         """Generate DocuSign OAuth authorization URL"""
         params = {
             'response_type': 'code',
-            'scope': Config.DOCUSIGN_SCOPES,  # Use scopes from config
-            'client_id': Config.DOCUSIGN_INTEGRATION_KEY,  # Use integration key
+            'scope': Config.DOCUSIGN_SCOPES,
+            'client_id': Config.DOCUSIGN_INTEGRATION_KEY,
             'redirect_uri': Config.DOCUSIGN_REDIRECT_URI,
-            'prompt': 'login'  # Force login prompt
+            'prompt': 'login'
         }
         auth_url = f"{self.auth_url}?" + "&".join(f"{k}={v}" for k, v in params.items())
         return auth_url
+
+    async def get_token(self, code: str) -> Optional[str]:
+        """Exchange authorization code for access token"""
+        try:
+            data = {
+                'grant_type': 'authorization_code',
+                'code': code,
+                'client_id': Config.DOCUSIGN_INTEGRATION_KEY,
+                'client_secret': Config.DOCUSIGN_SECRET_KEY,
+                'redirect_uri': Config.DOCUSIGN_REDIRECT_URI
+            }
+            headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+            
+            response = await self._make_request(
+                'POST',
+                self.token_url,
+                data=data,
+                headers=headers
+            )
+            return response.json().get('access_token')
+        except Exception as e:
+            st.error(f"Error getting token: {str(e)}")
+            if hasattr(e, 'response') and e.response is not None:
+                st.error(f"Response content: {e.response.text}")
+            return None
 
     async def fetch_account_id(self) -> Optional[str]:
         """Fetch DocuSign account ID"""
         try:
             headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
-            response = await self.client.get(self.userinfo_url, headers=headers)
-            response.raise_for_status()
+            response = await self._make_request('GET', self.userinfo_url, headers=headers)
             user_info = response.json()
             return user_info['accounts'][0]['account_id']
         except Exception as e:
@@ -295,12 +295,12 @@ class DocuSignClient:
         """Fetch envelopes from DocuSign"""
         try:
             headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
-            response = await self.client.get(
+            response = await self._make_request(
+                'GET',
                 f"{self.base_url}/{account_id}/envelopes",
                 headers=headers,
                 params={'from_date': '2024-01-01'}
             )
-            response.raise_for_status()
             return response.json().get('envelopes', [])
         except Exception as e:
             st.error(f"Error fetching envelopes: {str(e)}")
@@ -309,15 +309,12 @@ class DocuSignClient:
     async def fetch_documents(self, account_id: str, envelope_id: str) -> List[Dict]:
         """Fetch documents for an envelope"""
         try:
-            # Ensure we have a valid event loop
-            self._get_event_loop()
-            
             headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
-            response = await self.client.get(
+            response = await self._make_request(
+                'GET',
                 f"{self.base_url}/{account_id}/envelopes/{envelope_id}/documents",
                 headers=headers
             )
-            response.raise_for_status()
             return response.json().get('envelopeDocuments', [])
         except Exception as e:
             st.error(f"Error fetching documents: {str(e)}")
@@ -327,17 +324,12 @@ class DocuSignClient:
         """Fetch document content"""
         try:
             headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
-            response = await self.client.get(
+            response = await self._make_request(
+                'GET',
                 f"{self.base_url}/{account_id}{document_uri}",
                 headers=headers
             )
-            response.raise_for_status()
             return response.content
         except Exception as e:
             st.error(f"Error fetching document content: {str(e)}")
-            return None
-
-    async def close(self):
-        """Close the HTTP client"""
-        if self.client:
-            await self.client.aclose() 
+            return None 
