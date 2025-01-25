@@ -20,7 +20,7 @@ class Config:
     DOCUSIGN_TOKEN_URL = "https://account-d.docusign.com/oauth/token"
     DOCUSIGN_AUTH_URL = "https://account-d.docusign.com/oauth/auth"
     DOCUSIGN_REDIRECT_URI = "http://localhost:8501"  # Remove /callback
-    DOCUSIGN_SCOPES = "signature impersonation"  # Change scope to match DocuSign requirements
+    DOCUSIGN_SCOPES = "signature impersonation extended"  # Change scope to match DocuSign requirements
     DOCUSIGN_USER_ID = os.getenv("DOCUSIGN_USER_ID")
     DOCUSIGN_ACCOUNT_ID = os.getenv("DOCUSIGN_ACCOUNT_ID")
     BATCH_SIZE = 5  # Number of vectors to upsert at once 
@@ -28,7 +28,7 @@ class Config:
     # DocuSign config
     DOCUSIGN_CLIENT_ID = os.getenv("DOCUSIGN_CLIENT_ID")
     DOCUSIGN_CLIENT_SECRET = os.getenv("DOCUSIGN_CLIENT_SECRET")
-    DOCUSIGN_BASE_PATH = "https://demo.docusign.net/restapi"
+    DOCUSIGN_BASE_PATH = "https://demo.docusign.net/restapi/v2.1"
     DOCUSIGN_AUTH_SERVER = "account-d.docusign.com"
 
     @staticmethod

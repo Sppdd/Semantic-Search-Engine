@@ -3,7 +3,7 @@ python-dotenv
 requests
 pinecone-client
 numpy
-docusign-esign
+docusign-esign>=3.22.0
 sentence-transformers
 PyPDF2
 python-docx

@@ -272,35 +272,64 @@ async def process_envelopes(client, account_id):
                         doc_col1, doc_col2 = st.columns([4, 1])
                         with doc_col1:
                             st.write(f"📄 {doc['name']}")
+                            # Show if document has been processed
+                            if doc['name'] in st.session_state.get('processed_files', set()):
+                                st.write("✅ Processed")
                         with doc_col2:
-                            if st.button("Import", key=f"import_{envelope['envelopeId']}_{doc['documentId']}"):
+                            button_key = f"import_{envelope['envelopeId']}_{doc['documentId']}"
+                            if st.button("Import", key=button_key):
                                 await process_document(client, account_id, doc)
 
 async def process_document(client, account_id, doc):
     """Process a single document"""
-    with st.spinner(f"Importing {doc['name']}..."):
-        content = await client.fetch_document(account_id, doc['uri'])
-        if content:
+    try:
+        with st.spinner(f"Importing {doc['name']}..."):
+            # Fetch document content
+            content = await client.fetch_document(account_id, doc['uri'])
+            if not content:
+                st.error("Failed to fetch document content")
+                return
+
+            # Extract text
             text_content = extract_text_from_bytes(content)
-            if text_content:
-                embedding = app.embedding_service.get_single_embedding(text_content)
-                if embedding:
-                    try:
-                        app.vector_store.upsert(
-                            vectors=[(
-                                f"docusign_{doc['documentId']}",
-                                embedding,
-                                {
-                                    'title': doc['name'],
-                                    'preview': text_content[:200] + "...",
-                                    'source': 'DocuSign'
-                                }
-                            )]
-                        )
-                        st.session_state.processed_files.add(doc['name'])
-                        st.success(f"Successfully imported {doc['name']}")
-                    except Exception as e:
-                        st.error(f"Error storing document: {str(e)}")
+            if not text_content:
+                st.error("Failed to extract text from document")
+                return
+
+            # Create embedding service and vector store instances
+            embedding_service = EmbeddingService()
+            vector_store = VectorStore()
+
+            # Get embedding
+            embedding = embedding_service.get_single_embedding(text_content)
+            if not embedding:
+                st.error("Failed to generate embedding")
+                return
+
+            # Store in vector database
+            try:
+                vector_store.upsert(
+                    vectors=[(
+                        f"docusign_{doc['documentId']}",  # unique ID
+                        embedding,
+                        {
+                            'title': doc['name'],
+                            'preview': text_content[:200] + "...",
+                            'source': 'DocuSign',
+                            'document_id': doc['documentId']
+                        }
+                    )]
+                )
+                # Add to processed files
+                if 'processed_files' not in st.session_state:
+                    st.session_state.processed_files = set()
+                st.session_state.processed_files.add(doc['name'])
+                st.success(f"Successfully imported {doc['name']}")
+            except Exception as e:
+                st.error(f"Error storing document in vector database: {str(e)}")
+
+    except Exception as e:
+        st.error(f"Error processing document {doc['name']}: {str(e)}")
 
 def extract_text_from_bytes(content: bytes) -> str:
     """Extract text from document bytes"""

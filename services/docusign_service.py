@@ -327,9 +327,18 @@ class DocuSignClient:
             response = await self._make_request(
                 'GET',
                 f"{self.base_url}/{account_id}{document_uri}",
-                headers=headers
+                headers=headers,
+                timeout=120.0  # Increase timeout for large documents
             )
-            return response.content
+            
+            if response.status_code == 200:
+                return response.content
+            else:
+                st.error(f"Failed to fetch document. Status code: {response.status_code}")
+                return None
+            
         except Exception as e:
             st.error(f"Error fetching document content: {str(e)}")
+            if hasattr(e, 'response'):
+                st.error(f"Response content: {e.response.text}")
             return None 

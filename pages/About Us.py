@@ -6,7 +6,7 @@ def main():
     st.markdown("""
     ## About the Project
     
-    This application is designed to help legal professionals and business users efficiently search and analyze legal documents 
+    This application is designed to help Docusign users to efficiently search and analyze Large volumes of documents 
     using advanced semantic search capabilities. By leveraging state-of-the-art natural language processing and vector search 
     technologies, it provides more intelligent and context-aware search results compared to traditional keyword-based search.
     
@@ -21,7 +21,7 @@ def main():
     
     #### Machine Learning Models
     - **Sentence Transformers**: Using `all-MiniLM-L6-v2` for generating document embeddings
-    - **HuggingFace**: API integration for model inference
+    - **HuggingFace**: API integration for model inference api requests
     
     #### Vector Database
     - **Pinecone**: Vector similarity search and storage

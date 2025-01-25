@@ -13,3 +13,4 @@ venv/
 contracts/
 quickstarter/
 examples.py
+.streamlit/secrets.toml
