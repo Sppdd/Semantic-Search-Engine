@@ -4,10 +4,17 @@ def main():
     st.title("Semantic Search Engine for [DocuSign Hackathon - Agreement Trap](https://unlocked.devpost.com/)")
     
     st.markdown("""
+    ### Overview
+
+    A Streamlit-based application that allows users to import documents from DocuSign or other document management 
+    system like your local files to build your own vector database and perform semantic search across uploaded 
+    documents using advanced hugging face semantic search model and Gemini Model.        
+
+
     ## Makeing the Impossible .. Possible
     
     ### It's Impossible to
-    - Access through the all documents at once in DocuSign or any other document management system anytime.
+    - Access through the all documents at once in DocuSign or any other document management system like local files anytime.
     - Building personalized Knowledge Database similar to [obsidian](https://en.wikipedia.org/wiki/Obsidian_(software)) for each user that customize and grow.
     - Bring knowledge to any AI workload. 
 
