@@ -11,12 +11,16 @@ import docx
 import fitz  # PyMuPDF
 import asyncio
 from services.docusign_service import DocuSignClient
+import google.generativeai as genai
 
 class AgreementSearchApp:
     def __init__(self):
         self.embedding_service = EmbeddingService()
         self.vector_store = VectorStore()
         self.status_placeholder = None
+        # Initialize Gemini
+        genai.configure(api_key=Config.GEMINI_API_KEY)
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
     def set_status(self, message: str, is_error: bool = False):
         """Update status message in the UI"""
@@ -24,6 +28,35 @@ class AgreementSearchApp:
             st.error(message)
         else:
             st.info(message)
+
+    def generate_ai_response(self, query: str, search_results: List[Dict]) -> str:
+        """Generate a structured response using Gemini based on search results"""
+        try:
+            # Construct context from search results
+            context = "\n\n".join([
+                f"Document: {result.metadata.get('title', 'Untitled')}\n"
+                f"Content: {result.metadata.get('preview', 'No preview available')}"
+                for result in search_results
+            ])
+
+            # Construct prompt for Gemini
+            prompt = f"""Based on the following search results, provide a comprehensive answer to the query: "{query}"
+
+Search Results:
+{context}
+
+Please structure your response in the following format:
+1. Direct answer to the query
+2. Key points from the relevant documents
+3. Source references
+
+Response:"""
+
+            # Generate response
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            return f"Error generating AI response: {str(e)}"
 
     def search_agreements(self, query: str, top_k: int = 5) -> List[Dict]:
         # Get query embedding
@@ -43,6 +76,51 @@ class AgreementSearchApp:
         except Exception as e:
             self.set_status(f"Search failed: {str(e)}", is_error=True)
             return []
+
+class DocuSignEmbedder:
+    def __init__(self):
+        self.embedding_service = EmbeddingService()
+        self.vector_store = VectorStore()
+
+    async def embed_document(self, doc_content: bytes, doc_metadata: dict) -> bool:
+        """
+        Embed a single DocuSign document into the vector store
+        Returns True if successful, False otherwise
+        """
+        try:
+            # Extract text from document
+            text_content = extract_text_from_bytes(doc_content)
+            if not text_content:
+                st.error("Could not extract text from document")
+                return False
+
+            # Generate embedding
+            embedding = self.embedding_service.get_single_embedding(text_content)
+            if not embedding:
+                st.error("Failed to generate embedding")
+                return False
+
+            # Store in vector database
+            self.vector_store.upsert(
+                vectors=[(
+                    f"docusign_{doc_metadata['documentId']}",  # unique ID
+                    embedding,
+                    {
+                        'title': doc_metadata['name'],
+                        'preview': text_content[:200] + "...",
+                        'source': 'DocuSign',
+                        'document_id': doc_metadata['documentId'],
+                        'envelope_id': doc_metadata.get('envelopeId'),
+                        'status': doc_metadata.get('status'),
+                        'sent_date': doc_metadata.get('sentDateTime')
+                    }
+                )]
+            )
+            return True
+
+        except Exception as e:
+            st.error(f"Error embedding document: {str(e)}")
+            return False
 
 def extract_text_from_file(file):
     """Extract text from various file formats"""
@@ -147,10 +225,20 @@ def main():
                         
                         if results:
                             st.success(f"Found {len(results)} results!")
-                            for idx, result in enumerate(results, 1):
-                                with st.expander(f"Result {idx} - Score: {result.score:.2f}"):
-                                    st.write(f"Document: {result.metadata.get('title', 'N/A')}")
-                                    st.write(f"Content Preview: {result.metadata.get('preview', 'N/A')}")
+                            
+                            # Add tabs for different views
+                            search_tab1, search_tab2 = st.tabs(["AI Response", "Raw Results"])
+                            
+                            with search_tab1:
+                                with st.spinner("Generating AI response..."):
+                                    ai_response = app.generate_ai_response(query, results)
+                                    st.markdown(ai_response)
+                            
+                            with search_tab2:
+                                for idx, result in enumerate(results, 1):
+                                    with st.expander(f"Result {idx} - Score: {result.score:.2f}"):
+                                        st.write(f"Document: {result.metadata.get('title', 'N/A')}")
+                                        st.write(f"Content Preview: {result.metadata.get('preview', 'N/A')}")
                         else:
                             st.warning("No results found")
                 else:
@@ -269,19 +357,30 @@ async def process_envelopes(client, account_id):
                 docs = await client.fetch_documents(account_id, envelope['envelopeId'])
                 if docs:
                     for doc in docs:
+                        # Add envelope metadata to document
+                        doc.update({
+                            'envelopeId': envelope['envelopeId'],
+                            'status': envelope.get('status'),
+                            'sentDateTime': envelope.get('sentDateTime')
+                        })
+                        
                         doc_col1, doc_col2 = st.columns([4, 1])
                         with doc_col1:
                             st.write(f"📄 {doc['name']}")
-                            # Show if document has been processed
                             if doc['name'] in st.session_state.get('processed_files', set()):
-                                st.write("✅ Processed")
+                                st.write("✅ Already processed")
+                            else:
+                                st.write("⏳ Ready to import")
                         with doc_col2:
                             button_key = f"import_{envelope['envelopeId']}_{doc['documentId']}"
-                            if st.button("Import", key=button_key):
-                                await process_document(client, account_id, doc)
+                            if not doc['name'] in st.session_state.get('processed_files', set()):
+                                if st.button("Import", key=button_key):
+                                    await process_document(client, account_id, doc)
 
 async def process_document(client, account_id, doc):
     """Process a single document"""
+    embedder = DocuSignEmbedder()
+    
     try:
         with st.spinner(f"Importing {doc['name']}..."):
             # Fetch document content
@@ -290,43 +389,29 @@ async def process_document(client, account_id, doc):
                 st.error("Failed to fetch document content")
                 return
 
-            # Extract text
-            text_content = extract_text_from_bytes(content)
-            if not text_content:
-                st.error("Failed to extract text from document")
-                return
+            # Prepare document metadata
+            doc_metadata = {
+                'documentId': doc['documentId'],
+                'name': doc['name'],
+                'envelopeId': doc.get('envelopeId'),
+                'status': doc.get('status'),
+                'sentDateTime': doc.get('sentDateTime')
+            }
 
-            # Create embedding service and vector store instances
-            embedding_service = EmbeddingService()
-            vector_store = VectorStore()
-
-            # Get embedding
-            embedding = embedding_service.get_single_embedding(text_content)
-            if not embedding:
-                st.error("Failed to generate embedding")
-                return
-
-            # Store in vector database
-            try:
-                vector_store.upsert(
-                    vectors=[(
-                        f"docusign_{doc['documentId']}",  # unique ID
-                        embedding,
-                        {
-                            'title': doc['name'],
-                            'preview': text_content[:200] + "...",
-                            'source': 'DocuSign',
-                            'document_id': doc['documentId']
-                        }
-                    )]
-                )
-                # Add to processed files
+            # Embed document
+            success = await embedder.embed_document(content, doc_metadata)
+            
+            if success:
+                # Update session state
                 if 'processed_files' not in st.session_state:
                     st.session_state.processed_files = set()
                 st.session_state.processed_files.add(doc['name'])
                 st.success(f"Successfully imported {doc['name']}")
-            except Exception as e:
-                st.error(f"Error storing document in vector database: {str(e)}")
+                
+                # Force a rerun to update the UI
+                st.rerun()
+            else:
+                st.error(f"Failed to import {doc['name']}")
 
     except Exception as e:
         st.error(f"Error processing document {doc['name']}: {str(e)}")

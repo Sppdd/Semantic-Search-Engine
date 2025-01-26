@@ -12,6 +12,7 @@ class Config:
     PINECONE_API_KEY = os.getenv("PINECONE_KEY")
     PINECONE_ENVIRONMENT = "gcp-starter"  # Free tier environment
     PINECONE_INDEX_NAME = "contracts"
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     DOCUSIGN_INTEGRATION_KEY = os.getenv("DOCUSIGN_INTEGRATION_KEY")
     DOCUSIGN_SECRET_KEY = os.getenv("DOCUSIGN_SECRET_KEY")
     DOCUSIGN_AUTHORIZATION_SERVER = "https://account-d.docusign.com"
@@ -19,7 +20,7 @@ class Config:
     DOCUSIGN_USERINFO_URL = "https://account-d.docusign.com/oauth/userinfo"
     DOCUSIGN_TOKEN_URL = "https://account-d.docusign.com/oauth/token"
     DOCUSIGN_AUTH_URL = "https://account-d.docusign.com/oauth/auth"
-    DOCUSIGN_REDIRECT_URI = "http://localhost:8501"  # Remove /callback
+    DOCUSIGN_REDIRECT_URI = "https://semanticsearhengine.streamlit.app/"  # Remove /callback
     DOCUSIGN_SCOPES = "signature impersonation extended"  # Change scope to match DocuSign requirements
     DOCUSIGN_USER_ID = os.getenv("DOCUSIGN_USER_ID")
     DOCUSIGN_ACCOUNT_ID = os.getenv("DOCUSIGN_ACCOUNT_ID")

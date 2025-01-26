@@ -13,6 +13,77 @@ import httpx
 import streamlit as st
 import asyncio
 from contextlib import asynccontextmanager
+from services.embedding_service import EmbeddingService
+from services.vector_store import VectorStore
+import fitz  # PyMuPDF
+from io import BytesIO
+import PyPDF2
+
+class DocuSignEmbedder:
+    def __init__(self):
+        self.embedding_service = EmbeddingService()
+        self.vector_store = VectorStore()
+
+    def extract_text_from_bytes(self, content: bytes) -> str:
+        """Extract text from document bytes"""
+        try:
+            # Try PyMuPDF first
+            pdf_document = fitz.open(stream=content, filetype="pdf")
+            text = ""
+            for page in pdf_document:
+                text += page.get_text()
+            return text
+        except Exception as e:
+            try:
+                # Fallback to PyPDF2
+                pdf_reader = PyPDF2.PdfReader(BytesIO(content))
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text()
+                return text
+            except Exception as e:
+                print(f"Error extracting text from document: {str(e)}")
+                return None
+
+    async def embed_document(self, doc_content: bytes, doc_metadata: dict) -> bool:
+        """
+        Embed a single DocuSign document into the vector store
+        Returns True if successful, False otherwise
+        """
+        try:
+            # Extract text from document
+            text_content = self.extract_text_from_bytes(doc_content)
+            if not text_content:
+                print("Could not extract text from document")
+                return False
+
+            # Generate embedding
+            embedding = self.embedding_service.get_single_embedding(text_content)
+            if not embedding:
+                print("Failed to generate embedding")
+                return False
+
+            # Store in vector database
+            self.vector_store.upsert(
+                vectors=[(
+                    f"docusign_{doc_metadata['documentId']}",  # unique ID
+                    embedding,
+                    {
+                        'title': doc_metadata['name'],
+                        'preview': text_content[:200] + "...",
+                        'source': 'DocuSign',
+                        'document_id': doc_metadata['documentId'],
+                        'envelope_id': doc_metadata.get('envelopeId'),
+                        'status': doc_metadata.get('status'),
+                        'sent_date': doc_metadata.get('sentDateTime')
+                    }
+                )]
+            )
+            return True
+
+        except Exception as e:
+            print(f"Error embedding document: {str(e)}")
+            return False
 
 class DocuSignService:
     def __init__(self):
@@ -25,6 +96,7 @@ class DocuSignService:
         self._code_verifier = None
         self._state = None
         self.base_path = Config.DOCUSIGN_BASE_PATH
+        self.embedder = DocuSignEmbedder()
         
         # Store authentication state
         self.is_authenticated = False
@@ -216,6 +288,35 @@ class DocuSignService:
             print(f"Traceback: {traceback.format_exc()}")
             return None
 
+    async def process_document(self, doc_content: bytes, doc_metadata: dict) -> bool:
+        """Process and embed a single document"""
+        return await self.embedder.embed_document(doc_content, doc_metadata)
+
+    async def download_and_process_document(self, envelope_id: str, document_id: str, doc_metadata: dict) -> bool:
+        """Download and process a specific document from an envelope"""
+        try:
+            if not self.access_token or not self.account_id:
+                print("No access token or account ID available")
+                return False
+
+            print(f"Downloading document {document_id} from envelope {envelope_id}")
+            envelopes_api = EnvelopesApi(self.api_client)
+            document_content = envelopes_api.get_document(
+                account_id=self.account_id,
+                envelope_id=envelope_id,
+                document_id=document_id
+            )
+            
+            if document_content:
+                return await self.process_document(document_content, doc_metadata)
+            return False
+            
+        except Exception as e:
+            print(f"Failed to download and process document: {str(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            return False
+
 class DocuSignClient:
     def __init__(self):
         self.base_url = "https://demo.docusign.net/restapi/v2.1/accounts"
@@ -223,6 +324,7 @@ class DocuSignClient:
         self.token_url = "https://account-d.docusign.com/oauth/token"
         self.userinfo_url = "https://account-d.docusign.com/oauth/userinfo"
         self.client = None
+        self.embedder = DocuSignEmbedder()
         
     @asynccontextmanager
     async def get_client(self):
@@ -341,4 +443,39 @@ class DocuSignClient:
             st.error(f"Error fetching document content: {str(e)}")
             if hasattr(e, 'response'):
                 st.error(f"Response content: {e.response.text}")
-            return None 
+            return None
+
+    async def process_document(self, content: bytes, doc_metadata: dict) -> bool:
+        """Process and embed a document"""
+        return await self.embedder.embed_document(content, doc_metadata)
+
+    async def download_and_process_document(self, account_id: str, envelope_id: str, doc: dict) -> bool:
+        """Download and process a document"""
+        try:
+            # Fetch document content
+            headers = {'Authorization': f'Bearer {st.session_state.docusign_token}'}
+            response = await self._make_request(
+                'GET',
+                f"{self.base_url}/{account_id}/envelopes/{envelope_id}/documents/{doc['documentId']}",
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                # Prepare metadata
+                doc_metadata = {
+                    'documentId': doc['documentId'],
+                    'name': doc['name'],
+                    'envelopeId': envelope_id,
+                    'status': doc.get('status'),
+                    'sentDateTime': doc.get('sentDateTime')
+                }
+                
+                # Process the document
+                return await self.process_document(response.content, doc_metadata)
+            else:
+                st.error(f"Failed to fetch document. Status code: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            st.error(f"Error processing document: {str(e)}")
+            return False 
