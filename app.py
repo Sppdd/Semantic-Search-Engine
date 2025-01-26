@@ -46,9 +46,8 @@ Search Results:
 {context}
 
 Please structure your response in the following format:
-1. Direct answer to the query
-2. Key points from the relevant documents
-3. Source references
+1. Direct answer to the query "make it short and simple".
+2. In this structure "Source references: with the documents names only."
 
 Response:"""
 
