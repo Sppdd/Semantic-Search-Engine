@@ -5,6 +5,7 @@ def main():
     st.markdown("""
     ## About Me
     
+    hi, I'm Karrar.            
     I am a researcher and a developer, building project to adopt AI in various fields.
                 
     Let's Connect on [LinkedIn](https://www.linkedin.com/in/karrarabudhar/)

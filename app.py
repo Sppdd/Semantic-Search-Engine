@@ -245,6 +245,7 @@ def main():
     
     with tab2:
         st.header("Import Local Documents")
+        st.markdown("*Don't Upload sensitive documents to the app, becasue it going to be saved in the Pinecone database and It will be accessable for everyone when they make qureys*")
         
         # File uploader
         uploaded_files = st.file_uploader(
@@ -288,7 +289,8 @@ def main():
 
     with tab3:
         st.header("Import from DocuSign")
-        
+        st.markdown("*It's my sandbox environment, so It's only connected to my developer account which means you can't use your account to fetch data from.*")
+
         # Initialize DocuSign state
         if 'docusign_token' not in st.session_state:
             st.session_state.docusign_token = None
