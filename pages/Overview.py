@@ -6,20 +6,19 @@ def main():
     st.markdown("""
     ### Overview
 
-    A Streamlit-based application that allows users to import documents from DocuSign or other document management 
-    system like your local files to build your own vector database and perform semantic search across uploaded 
-    documents using advanced hugging face semantic search model and Gemini Model.        
+    This application empowers Docusign users to unlock the potential of their documents by enabling efficient search and analysis of large volumes with advanced semantic search capabilities. 
+    By harnessing cutting-edge natural language processing and vector search technologies, it delivers intelligent and context-aware search results that transcend traditional keyword-based methods.        
 
 
-    ## Makeing the Impossible .. Possible
+    ## Making the Impossible .. Possible
     
     ### It's Impossible to
-    - Access through the all documents at once in DocuSign or any other document management system like local files anytime.
+    - Access all document content at once in DocuSign using documents from file storage systems such as local files, DocuSign envelopes, Google Cloud etc. 
     - Building personalized Knowledge Database similar to [obsidian](https://en.wikipedia.org/wiki/Obsidian_(software)) for each user that customize and grow.
-    - Bring knowledge to any AI workload. 
+    - Build & Bring knowledge to any AI workload with your knowledge database from Docusign.
 
     ### But it's Possible with
-    - [Pinecone](https://www.pinecone.io/) Vector Database, You can do more then Semantic search such as Multi-model search, Recommendations and classification.
+    - [Pinecone](https://www.pinecone.io/) Vector Database, You can do more than Semantic search such as Multi-model search, Recommendations and classification.
     
     
     #### Key Features
