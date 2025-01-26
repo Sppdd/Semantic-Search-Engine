@@ -6,9 +6,8 @@ def main():
     st.markdown("""
     ### Overview
 
-    This application empowers Docusign users to unlock the potential of their documents by enabling efficient search and analysis of large volumes with advanced semantic search capabilities. 
-    By harnessing cutting-edge natural language processing and vector search technologies, it delivers intelligent and context-aware search results that transcend traditional keyword-based methods.        
-
+     A Streamlit-based application that allows DocuSign users to import documents from DocuSign or from local system to build your their own personalized vector knowledge database and perform semantic search across uploaded 
+    documents using advanced hugging face semantic search model and Gemini Model.        
 
     ## Making the Impossible .. Possible
     
