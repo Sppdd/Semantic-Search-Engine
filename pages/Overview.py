@@ -11,13 +11,9 @@ def main():
 
     ## Making the Impossible .. Possible
     
-    ### It's Impossible to
-    - Access all document content at once in DocuSign using documents from file storage systems such as local files, DocuSign envelopes, Google Cloud etc. 
-    - Building personalized Knowledge Database similar to [obsidian](https://en.wikipedia.org/wiki/Obsidian_(software)) for each user that customize and grow.
-    - Build & Bring knowledge to any AI workload with your knowledge database from Docusign.
+    ##### It's Impossible to have a personalized knowledge database for each user in Docusign that scales with the number of documents. which have access to all the documents data with accurece and performance.
 
-    ### But it's Possible with
-    - [Pinecone](https://www.pinecone.io/) Vector Database, You can do more than Semantic search such as Multi-model search, Recommendations and classification.
+    ##### But with [Pinecone](https://www.pinecone.io/) Vector Database it's Possible and it could be used in any AI workload such as Chatbots, Recommendations, Classification, etc.
     
     
     #### Key Features
