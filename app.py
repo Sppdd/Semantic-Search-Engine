@@ -46,8 +46,9 @@ Search Results:
 {context}
 
 Please structure your response in the following format:
-1. Direct answer to the query "make it short and simple".
-2. In this structure "Source references: with the documents names only."
+
+    1. Direct answer to the query meaningful and insightful.
+    2. In this structure "Source references: with the documents names only."
 
 Response:"""
 
