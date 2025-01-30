@@ -6,7 +6,7 @@ def main():
     st.markdown("""
     ### Overview
 
-     A Streamlit-based application that allows DocuSign users to import documents from DocuSign or from local system to build your their own personalized vector knowledge database and perform semantic search across uploaded 
+     A Streamlit-based application that allows DocuSign users to import documents from DocuSign or from local system to build their own personalized vector knowledge database and perform semantic search across uploaded 
     documents using advanced hugging face semantic search model and Gemini Model.        
 
     ## Making the Impossible .. Possible
