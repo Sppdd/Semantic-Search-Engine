@@ -2,7 +2,7 @@
 
 A Streamlit-based application that allows users to import documents from DocuSign or other document management systems like your local files to build your own vector database and perform a semantic search across uploaded documents using the advanced hugging face semantic search model and Gemini Model.
 
-[![Video Name]([https://img.youtube.com/vi/VIDEO_ID/0.jpg](https://i.ytimg.com/vi/L-EsxLk8OkI/hqdefault.jpg?sqp=-oaymwEnCOADEI4CSFryq4qpAxkIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB&rs=AOn4CLDb-u8s77lUsGNPqBUNG7OPSro-jQ))](https://www.youtube.com/watch?v=L-EsxLk8OkI&t=19s)
+[Youtube Demo](https://www.youtube.com/watch?v=L-EsxLk8OkI&t=19s)
 
 ## Setup and Installation
 
