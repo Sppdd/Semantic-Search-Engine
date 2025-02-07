@@ -1,6 +1,6 @@
 # Semantic Search Engine for [DocuSign Hackathon - Agreement Trap](https://unlocked.devpost.com/)
 
-A Streamlit-based application that allows users to import documents from DocuSign or other document management system like your local files to build your own vector database and perform semantic search across uploaded documents using advanced hugging face semantic search model and Gemini Model.
+A Streamlit-based application that allows users to import documents from DocuSign or other document management systems like your local files to build your own vector database and perform a semantic search across uploaded documents using the advanced hugging face semantic search model and Gemini Model.
 
 
 
@@ -40,33 +40,31 @@ A Streamlit-based application that allows users to import documents from DocuSig
 
 ### Technology Stack
     
-                
+ ##### Machine Learning Models
+ - **Sentence Transformers**: Using [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) for generating document embeddings
+ 
+ 
+ ##### Vector Database
+ - **[Pinecone](https://www.pinecone.io/)**: Vector similarity search and storage
+ 
+ ##### AI Model
+ - **[Gemini](https://www.gemini.com/)**: AI model for generating nice responses to user queries
+             
 
-    ##### Machine Learning Models
-    - **Sentence Transformers**: Using [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) for generating document embeddings
-    
-    
-    ##### Vector Database
-    - **[Pinecone](https://www.pinecone.io/)**: Vector similarity search and storage
-    
-    ##### AI Model
-    - **[Gemini](https://www.gemini.com/)**: AI model for generating nice responses to user queries
-                
-
-    ##### Document Processing
-    - PyMuPDF (fitz)
-    - PyPDF2
-    - python-docx
-    
-    #### Integration
-    - DocuSign eSignature API
-    - Streamlit for the user interface
-    - [HuggingFace Inference API](https://huggingface.co/docs/api-inference/index)
+ ##### Document Processing
+ - PyMuPDF (fitz)
+ - PyPDF2
+ - python-docx
+ 
+ #### Integration
+ - DocuSign eSignature API
+ - Streamlit for the user interface
+ - [HuggingFace Inference API](https://huggingface.co/docs/api-inference/index)
 
 
 
-    ### I Wrote all the code from scratch and it's only for this hackathon with help of AI tools.
-      
-      *For more information, Drop me a message*
+  I Wrote all the code from scratch and it's only for this hackathon with the help of AI tools.
+   
+   *For more information, Drop me a message on LinkedIn*
 
-      #Docusign #huggingFace #gemini #semantic_search #streamlit
+   #Docusign #huggingFace #gemini #semantic_search #streamlit
